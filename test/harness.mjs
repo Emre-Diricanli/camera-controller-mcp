@@ -12,6 +12,7 @@
  */
 import { spawn } from 'node:child_process';
 import net from 'node:net';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -24,7 +25,25 @@ import { createMcpServer } from '../server.js';
 export { z } from 'zod';
 export { Client, InMemoryTransport };
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The MCP package itself (mcp/ here; the repo root in camera-controller-mcp). */
+const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const MCP_INDEX = path.join(PKG, 'index.js');
+
+const isController = (dir) => Boolean(dir) && existsSync(path.join(dir, 'server/index.js')) && existsSync(path.join(dir, 'tools/mock-camera.js'));
+
+/**
+ * The tests need a real controller checkout to run against: the monorepo this
+ * package lives in, $CONTROLLER_REPO, or a sibling onvif_controller clone.
+ */
+export function findController() {
+  const candidates = [
+    process.env.CONTROLLER_REPO,
+    path.resolve(PKG, '..'),
+    path.resolve(PKG, '..', 'onvif_controller'),
+    path.resolve(PKG, '..', 'onvif controller'),
+  ];
+  return candidates.find(isController) ?? null;
+}
 
 export async function freePort() {
   const srv = net.createServer();
@@ -52,6 +71,11 @@ async function waitFor(url, headers = {}, timeoutMs = 15000) {
  *   readOnly     run the context in read-only mode
  */
 export async function startHarness({ appEnv = {}, mockEnv = {}, config = {}, controllerToken = null, readOnly = false } = {}) {
+  const ROOT = findController();
+  if (!ROOT) {
+    throw new Error('No ONVIF Controller checkout found. Clone https://github.com/Emre-Diricanli/onvif_controller next to this one, '
+      + 'or set CONTROLLER_REPO=/path/to/onvif_controller.');
+  }
   const children = [];
   const spawnNode = (args, env) => {
     const child = spawn(process.execPath, args, { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });

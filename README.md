@@ -1,46 +1,50 @@
-# ONVIF Controller MCP server
+# Camera Controller MCP
 
 Point an AI agent at a camera or recorder and let it look, think and adjust.
 It sees snapshots, reads every setting with its real range and units, changes
 them through the controller's verified-write path, drives PTZ, and reports
 what the device *actually* did.
 
-The server talks to one or more running ONVIF Controller instances, on this
-machine or on remote site boxes. Every protocol the controller speaks works
-here too: ONVIF, Hikvision ISAPI, Dahua/Lorex, Axis VAPIX, Reolink and
-Uniview. The contract is in [`../MCP.md`](../MCP.md).
+The server talks to one or more running
+[ONVIF Controller](https://github.com/Emre-Diricanli/onvif_controller)
+instances, on this machine or on remote site boxes. Every protocol the
+controller speaks works here too: ONVIF, Hikvision ISAPI, Dahua/Lorex, Axis
+VAPIX, Reolink and Uniview. The design contract is in [`MCP.md`](MCP.md).
 
 ## Install
 
 ```
-npm install --prefix mcp
+git clone https://github.com/Emre-Diricanli/camera-controller-mcp.git
+cd camera-controller-mcp
+npm install
 ```
 
-You also need a controller running somewhere: `npm run up` (Docker) or
-`npm start` in the repo root.
+You also need an ONVIF Controller running somewhere. It does the actual
+talking to cameras:
+
+```
+git clone https://github.com/Emre-Diricanli/onvif_controller.git
+cd onvif_controller && npm run up      # Docker; prints the URL, e.g. http://127.0.0.1:8080
+```
 
 ## Connect an agent
 
-**Claude Code** (from this repo; `.mcp.json` is already here):
+**Claude Code**, available in every project:
 
 ```
-claude          # then approve the "onvif-controller" MCP server
+claude mcp add --scope user camera-controller -e ONVIF_CONTROLLER_URL=http://127.0.0.1:8080 -- node /absolute/path/to/camera-controller-mcp/index.js
 ```
 
-or anywhere:
-
-```
-claude mcp add onvif-controller -e ONVIF_CONTROLLER_URL=http://127.0.0.1:8081 -- node "/path/to/onvif controller/mcp/index.js"
-```
+Then start `claude` anywhere. `/mcp` should list it as connected.
 
 **Claude Desktop, or any MCP client using stdio:**
 
 ```json
 {
   "mcpServers": {
-    "onvif-controller": {
+    "camera-controller": {
       "command": "node",
-      "args": ["/path/to/onvif controller/mcp/index.js"],
+      "args": ["/absolute/path/to/camera-controller-mcp/index.js"],
       "env": { "ONVIF_CONTROLLER_URL": "http://127.0.0.1:8081" }
     }
   }
@@ -50,7 +54,7 @@ claude mcp add onvif-controller -e ONVIF_CONTROLLER_URL=http://127.0.0.1:8081 --
 **Remote agents (Streamable HTTP):**
 
 ```
-MCP_HTTP_TOKEN=<long random secret> node mcp/index.js --http --port 8770
+MCP_HTTP_TOKEN=<long random secret> node index.js --http --port 8770
 ```
 
 This serves `http://127.0.0.1:8770/mcp`, and clients send
@@ -60,7 +64,7 @@ Put HTTPS in front of it before exposing it beyond a trusted network.
 
 ## Configure controllers and devices
 
-Copy `config.example.json` to `config.json` (gitignored), or point
+Copy `config.example.json` to `config.json` in this folder (gitignored), or point
 `ONVIF_MCP_CONFIG` at a file. With no config there is one controller at
 `ONVIF_CONTROLLER_URL` (default `http://127.0.0.1:8080`) and no saved devices.
 The agent can still open any camera by address with `connect_device`.
@@ -118,10 +122,15 @@ from.
 ## Develop
 
 ```
-node tools/tests/mcp-core.mjs        # or: npm test (runs every tools/tests/mcp-*.mjs)
+npm test
 ```
 
-The tests boot a mock camera and a real controller, and call tools through
-the MCP protocol exactly as an agent does (`mcp/test/harness.mjs`). To add a
-tool, put a module in `mcp/tools/` exporting `tools` (MCP.md §3). It is
+The tests boot a mock camera and a real controller from an ONVIF Controller
+checkout: a sibling `onvif_controller` clone (dependencies installed), or
+`CONTROLLER_REPO=/path/to/onvif_controller npm test`. They call tools through
+the MCP protocol exactly as an agent does (`test/harness.mjs`).
+
+To add a tool, put a module in `tools/` exporting `tools` (MCP.md §3). It is
 discovered automatically.
+
+This package is also kept in sync inside the controller repo under `mcp/`.
